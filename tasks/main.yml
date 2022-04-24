@@ -1,0 +1,74 @@
+---
+# tasks file for ansible-role-postgresql
+- name: Populate service facts
+  service_facts:
+
+- name: Install PostgreSQL
+  package:
+    name: "{{ item }}"
+    state: present
+  register: package_res
+  retries: 5
+  until: package_res is success
+  with_items:
+    - postgresql-server
+    - python3-psycopg2
+
+- name: init PostgreSQL DB
+  command: /usr/bin/postgresql-setup --initdb
+  args:
+    creates: /var/lib/pgsql/data/postgresql.conf
+
+- name: Set PostgreSQL listen address
+  lineinfile:
+    path: /var/lib/pgsql/data/postgresql.conf
+    regexp: '^listen_addresses = '
+    line: "listen_addresses = '*'"
+
+- name: Allow remote access to db
+  postgresql_pg_hba:
+    dest: /var/lib/pgsql/data/pg_hba.conf
+    contype: host
+    users: all
+    source: 0.0.0.0/0
+    databases: "{{ postgresql_db_name }}"
+    method: md5
+
+- name: Allow remote access to db
+  postgresql_pg_hba:
+    dest: /var/lib/pgsql/data/pg_hba.conf
+    contype: host
+    users: all
+    source: 127.0.0.1/32
+    databases: all
+    method: ident
+    state: absent
+
+- name: Enable port {{ postgresql_listen_port }} in firewalld
+  firewalld:
+    port: "{{ postgresql_listen_port }}/tcp"
+    permanent: yes
+    immediate: true
+    state: enabled
+  when: "'firewalld.service' in services"
+
+- name: Start service postgresql, if not started
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Create a new database with name "{{ db_name }}"
+  postgresql_db:
+    name: "{{ postgresql_db_name }}"
+  become: yes
+  become_user: postgres
+
+- name: Create db user user, and grant access to database
+  postgresql_user:
+    db: "{{ postgresql_db_name }}"
+    name: "{{ postgresql_db_user }}"
+    password: "{{ postgresql_db_pass }}"
+    priv: "ALL"
+  become: yes
+  become_user: postgres

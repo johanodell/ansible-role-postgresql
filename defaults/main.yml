@@ -1,0 +1,6 @@
+---
+# defaults file for ansible-role-postgresql
+postgresql_db_name: test
+postgresql_db_user: testuser
+postgresql_db_pass: testpass
+postgresql_listen_port: 5432
